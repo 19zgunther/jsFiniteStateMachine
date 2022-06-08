@@ -1,3 +1,5 @@
+
+
 class StateMachine
 {
     constructor(htmlCanvasElement)
@@ -14,7 +16,6 @@ class StateMachine
 
         this.resize();
     }
-
     render() {
         const ctx = this.ctx; //this.htmlCanvasElement.getContext('2d');
         ctx.clearRect(0, 0, this.htmlCanvasElement.width, this.htmlCanvasElement.height);
@@ -97,7 +98,6 @@ class StateMachine
 
         this._adjustStatePositions();
     }
-
     _adjustStatePositions_OLD(speedMultiplier = 1)
     {
         for (let i=0; i<this.states.length; i++)
@@ -127,7 +127,6 @@ class StateMachine
             }
         }
     }
-
     _adjustStatePositions(speedMultiplier = 1)
     {
         //Get all forces acting on states due to proximity to other states
@@ -179,8 +178,6 @@ class StateMachine
 
         }
     }
-
-
     resize() {
         const bb = this.htmlCanvasElement.getBoundingClientRect();
         this.htmlCanvasElement.width = Math.round(bb.width);
@@ -336,37 +333,17 @@ class StateMachine
     const canvas = document.getElementById("testCanvas");
     console.log(canvas);
     const sm = new StateMachine(canvas);
-    /*
-    sm.addEdge('node1', 'node2', 'edge1');
-    sm.addEdge('node2', 'node1', 'edge1');
-    sm.addEdge('node1', 'node3', 'edge2');
-    sm.addEdge('node3', 'node2', 'edge3');
-    sm.addEdge('node3', 'node4123123', 'edge4');
-    sm.addEdge('node4123123', 'node1', 'edge1');
-    sm.addEdge('a', 'b', 'e')
-    sm.addEdge('a','c','e');
-    sm.addEdge('a','node1', 'e');
-    sm.addEdge('c','node3', 'e');*/
 
+
+    //randomly generate new fsm & load it
     let text = '';
     let possibleStates = ['a','b','c','d','e','f','g','h','i','j','k','l','m'];
     for (let i=0; i<10; i++)
     {
         text += possibleStates[Math.floor(Math.random() * possibleStates.length)] +','+possibleStates[Math.floor(Math.random() * possibleStates.length)]+','+'1,'; 
     }
-
-
-    /*sm.loadMachine(`
-    a,b,1,
-    a,c,2,
-    b,c,3,
-    a,d,1,
-    d,e,2,
-    e,f,3,
-    e,b,2,
-    `);*/
-
     sm.loadMachine(text);
+
 
     let interval = setInterval(update, 30);
 
