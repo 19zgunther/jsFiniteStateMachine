@@ -12,27 +12,25 @@ class StateMachine
         this.htmlCanvasElement = htmlCanvasElement;
         this.ctx = this.htmlCanvasElement.getContext("2d");
 
-        /*
-        function addEventListener(obj, eventType)
-        {
-
-        }
-
-        ['mousedown', 'mouseup', 'mousemove', 'mouseout'].forEach( function(eventType) {
-            htmlCanvasElement.addEventListener(eventType, t.eventListener());
-        });
-        */
-
+        
+        //mouse moving stuff
+        this.mouseIsDown = false;
+        this.selectedState = null;
+        this.movingSelectedState = false;
 
         this.minimumStateRadius = 10;
 
         this.resize();
+
+        //this.renderInterval = setInterval(this.render, 40);
     }
     render() {
         const ctx = this.ctx; //this.htmlCanvasElement.getContext('2d');
         ctx.clearRect(0, 0, this.htmlCanvasElement.width, this.htmlCanvasElement.height);
-        ctx.lineWidth = 2;
+        
+        ctx.lineWidth = 1;
         ctx.font = '15px sans-serif';
+
 
         //draw all of the states
         for (let i=0; i<this.states.length; i++)
@@ -158,7 +156,7 @@ class StateMachine
                     state.forceY -= movementAmount * Math.sin(angle);
                     otherState.forceX += movementAmount * Math.cos(angle);
                     otherState.forceY += movementAmount * Math.sin(angle);
-                } else if (difference > 300)
+                } else if (difference > 500)
                 {
                     const movementAmount = Math.min(difference/300, 5) * speedMultiplier/2;
                     state.forceX += movementAmount * Math.cos(angle);
@@ -173,6 +171,15 @@ class StateMachine
         for (let i=0; i<this.states.length; i++)
         {
             const state = this.states[i];
+
+            if (state == this.selectedState && this.movingSelectedState == true) { 
+                state.velocityX = 0;
+                state.velocityY = 0;
+                state.forceX = 0;
+                state.forceY = 0;
+                continue; 
+            }
+
             state.velocityX += state.forceX;
             state.velocityY += state.forceY;
             state.forceX = 0;
@@ -291,6 +298,7 @@ class StateMachine
     }
     _distBetweenPoints(x1, y1, x2, y2)
     {
+
         return Math.sqrt( Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2) );
     }
     loadMachine(code='node1,node2,edge1,')
@@ -329,7 +337,6 @@ class StateMachine
             this.addEdge(s1,s2,e);
         }
     }
-
     resize() {
         
         const bb = this.htmlCanvasElement.getBoundingClientRect();
@@ -338,7 +345,44 @@ class StateMachine
         //this.ctx = this.htmlCanvasElement.getContext("2d");
     }
     eventListener(event) {
-        console.log(event);
+        //console.log(event);
+        let mx = 0;
+        let my = 0;
+        switch(event.type)
+        {
+            case 'mousedown': 
+                this.mouseIsDown = true;
+                mx = event.offsetX;
+                my = event.offsetY;
+                for (let i=0; i<this.states.length; i++)
+                {
+                    const dist = this._distBetweenPoints(mx,my, this.states[i].posX, this.states[i].posY);
+                    if (dist < this.states[i].radius)
+                    {
+                        this.selectedState = this.states[i];
+                        this.movingSelectedState = true;
+                    }
+                }
+                break;
+            case 'mouseup': 
+                this.mouseIsDown = false;
+                this.movingSelectedState = false;
+                break;
+            case 'mouseout': 
+                this.mouseIsDown = false;
+                this.movingSelectedState = false;
+                break;
+            case 'mousemove': 
+                mx = event.offsetX;
+                my = event.offsetY;
+                if (this.mouseIsDown == true && this.movingSelectedState == true)
+                {
+                    this.selectedState.posX = mx;
+                    this.selectedState.posY = my;
+                }
+                break;
+
+        }
     }
 }
 
@@ -349,15 +393,22 @@ class StateMachine
 
     const canvas = document.getElementById("testCanvas");
     const sm = new StateMachine(canvas);
+    ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'onhover'].forEach(function(eventType)
+    {
+        canvas.addEventListener(eventType, function(e) {
+            sm.eventListener(e);
+        })
+    })
 
 
     //randomly generate new fsm & load it
     let text = '';
-    let possibleStates = ['a','b','c','d','e','f','g','h','i','j','k','l','m'];
+    let possibleStates = ['a234567890','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
     for (let i=0; i<10; i++)
     {
         text += possibleStates[Math.floor(Math.random() * possibleStates.length)] +','+possibleStates[Math.floor(Math.random() * possibleStates.length)]+','+'1,'; 
     }
+    console.log(text)
     sm.loadMachine(text);
 
 
@@ -366,6 +417,7 @@ class StateMachine
     function update() {
         sm.render();
     }
+
     
 
 }
