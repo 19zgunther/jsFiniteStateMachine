@@ -12,6 +12,18 @@ class StateMachine
         this.htmlCanvasElement = htmlCanvasElement;
         this.ctx = this.htmlCanvasElement.getContext("2d");
 
+        /*
+        function addEventListener(obj, eventType)
+        {
+
+        }
+
+        ['mousedown', 'mouseup', 'mousemove', 'mouseout'].forEach( function(eventType) {
+            htmlCanvasElement.addEventListener(eventType, t.eventListener());
+        });
+        */
+
+
         this.minimumStateRadius = 10;
 
         this.resize();
@@ -178,12 +190,6 @@ class StateMachine
 
         }
     }
-    resize() {
-        const bb = this.htmlCanvasElement.getBoundingClientRect();
-        this.htmlCanvasElement.width = Math.round(bb.width);
-        this.htmlCanvasElement.height = Math.round(bb.height);
-        //this.ctx = this.htmlCanvasElement.getContext("2d");
-    }
     addState(stateName, posX=Math.random()*this.htmlCanvasElement.width, posY=Math.random()*this.htmlCanvasElement.height)
     {
 
@@ -323,6 +329,17 @@ class StateMachine
             this.addEdge(s1,s2,e);
         }
     }
+
+    resize() {
+        
+        const bb = this.htmlCanvasElement.getBoundingClientRect();
+        this.htmlCanvasElement.width = Math.round(bb.width);
+        this.htmlCanvasElement.height = Math.round(bb.height);
+        //this.ctx = this.htmlCanvasElement.getContext("2d");
+    }
+    eventListener(event) {
+        console.log(event);
+    }
 }
 
 
@@ -331,7 +348,6 @@ class StateMachine
 {
 
     const canvas = document.getElementById("testCanvas");
-    console.log(canvas);
     const sm = new StateMachine(canvas);
 
 
