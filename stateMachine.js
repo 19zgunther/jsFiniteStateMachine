@@ -4,25 +4,31 @@ class StateMachine
 {
     constructor(htmlCanvasElement)
     {
+        //State Machine stuff
         this.states = [];
         this.nameToStateMap = new Map();
-
         this.currentState = null;
 
         this.htmlCanvasElement = htmlCanvasElement;
         this.ctx = this.htmlCanvasElement.getContext("2d");
 
+
+
+
         
         //mouse moving stuff
         this.mouseIsDown = false;
         this.selectedState = null;
+        this.drawingEdge = false;
         this.movingSelectedState = false;
 
+
+        //misc variables
         this.minimumStateRadius = 10;
+
 
         this.resize();
 
-        //this.renderInterval = setInterval(this.render, 40);
     }
     render() {
         const ctx = this.ctx; //this.htmlCanvasElement.getContext('2d');
@@ -107,35 +113,6 @@ class StateMachine
 
 
         this._adjustStatePositions();
-    }
-    _adjustStatePositions_OLD(speedMultiplier = 1)
-    {
-        for (let i=0; i<this.states.length; i++)
-        {
-            const state = this.states[i];
-            for (let j=i+1; j<this.states.length; j++)
-            {
-                const otherState = this.states[j];
-                const dist = this._distBetweenPoints(state.posX, state.posY, otherState.posX, otherState.posY);
-                const angle = Math.atan2(otherState.posY - state.posY, otherState.posX - state.posX);
-                const difference = dist - (state.radius + otherState.radius + 100);
-                if ( difference < 0  )
-                {
-                    const movementAmount = Math.min(-difference/10, 5) * speedMultiplier; //difference is negative, so movementAmount is positive
-                    state.posX = state.posX - movementAmount * Math.cos(angle);
-                    state.posY = state.posY - movementAmount * Math.sin(angle);
-                    otherState.posX = otherState.posX + movementAmount * Math.cos(angle);
-                    otherState.posY = otherState.posY + movementAmount * Math.sin(angle);
-                } else if (difference > 200)
-                {
-                    const movementAmount = Math.min(difference/300, 5) * speedMultiplier;
-                    state.posX = state.posX + movementAmount * Math.cos(angle);
-                    state.posY = state.posY + movementAmount * Math.sin(angle);
-                    otherState.posX = otherState.posX - movementAmount * Math.cos(angle);
-                    otherState.posY = otherState.posY - movementAmount * Math.sin(angle);
-                }
-            }
-        }
     }
     _adjustStatePositions(speedMultiplier = 1)
     {
@@ -273,6 +250,7 @@ class StateMachine
 
         //Now, we have 2 states & stateNames, and an edgeName
         state1.edges.push({
+            startState: state1,
             otherState: state2,
             edgeName: edgeName,
         });
@@ -344,8 +322,39 @@ class StateMachine
         this.htmlCanvasElement.height = Math.round(bb.height);
         //this.ctx = this.htmlCanvasElement.getContext("2d");
     }
+    _getStateClicked(mx,my) //returns a state if at mx,my
+    {
+        for (let i=0; i<this.states.length; i++)
+        {
+            const dist = this._distBetweenPoints(mx,my, this.states[i].posX, this.states[i].posY);
+            if (dist < this.states[i].radius)
+            {
+                return this.states[i];
+            }
+        }
+    }
+    _getEdgeClicked(mx,my)
+    {
+
+    }
+    _removeEdgeWithName(name) //returns removed edge
+    {
+        for (let i=0; i<this.states.length; i++)
+        {
+            const state = this.states[i];
+            for (let j=0; j<state.edges.length; j++)
+            {
+                if (state.edges[j].edgeName == name)
+                {
+                    let tempEdge = state.edges[j];
+                    state.edges.splice(j,1);
+                    return tempEdge;
+                }
+            }
+        }
+    }
+
     eventListener(event) {
-        //console.log(event);
         let mx = 0;
         let my = 0;
         switch(event.type)
@@ -354,15 +363,68 @@ class StateMachine
                 this.mouseIsDown = true;
                 mx = event.offsetX;
                 my = event.offsetY;
-                for (let i=0; i<this.states.length; i++)
+
+                //if we're currently drawing an edge...
+                if (this.drawingEdge == true)
                 {
-                    const dist = this._distBetweenPoints(mx,my, this.states[i].posX, this.states[i].posY);
-                    if (dist < this.states[i].radius)
-                    {
-                        this.selectedState = this.states[i];
-                        this.movingSelectedState = true;
+                    this.drawingEdge = false;
+                    let newSelectedState = this._getStateClicked(mx,my);
+
+                    //Now, let's find the tempEdge and remove it from the graph
+                    let tempEdge = this._removeEdgeWithName('_undefined_temp_edge_');
+
+                    //If we didn't click on another state, then we don't recreate the edge (no second state)
+                    if (newSelectedState == null) {  //remove temp edge
+                        break; 
                     }
+
+                    if (tempEdge == null) { console.error("did not find and remove temp edge"); break;}
+                    //Now, recreate the tempEdge the proper way this time
+                    this.addEdge(tempEdge.startState.name, newSelectedState.name, 'undefined' );
+                    this.selectedState = null;
+                    break;
                 }
+
+                //normally...
+                this.selectedState = this._getStateClicked(mx,my);
+                if (this.selectedState != null)
+                {
+                    this.movingSelectedState = true;
+                } else {
+                    //didn't select a state, but are we close to an edge?
+
+                    console.error("Should put select edge here");
+
+                }
+                break;
+            case 'dblclick':
+
+                this.mouseIsDown = false;
+                this.selectedState = null;
+                this.movingSelectedState == true
+                this.drawingEdge = true;
+
+                mx = event.offsetX;
+                my = event.offsetY;
+
+                this.selectedState = this._getStateClicked(mx,my);
+                if (this.selectedState != null)
+                {
+                    this.movingSelectedState = true;
+                } else {
+                    break;
+                }
+
+                //create a tempState, but not in this.states
+                const tempState = { posX: mx,  posY: my,  radius: 5,  };
+                
+                //create tempEdge,
+                this.selectedState.edges.push({
+                    startState: this.selectedState,
+                    otherState: tempState,
+                    edgeName: '_undefined_temp_edge_',
+                });
+                this.selectedState = tempState;
                 break;
             case 'mouseup': 
                 this.mouseIsDown = false;
@@ -375,13 +437,24 @@ class StateMachine
             case 'mousemove': 
                 mx = event.offsetX;
                 my = event.offsetY;
-                if (this.mouseIsDown == true && this.movingSelectedState == true)
+
+                //if we're currently drawing an edge..., set the this.selectedState (tempState) to the mouse position
+                if (this.drawingEdge == true)
+                {
+                    if (this.selectedState != null)
+                    {
+                        this.selectedState.posX = mx;
+                        this.selectedState.posY = my;
+                    }
+                    break;
+                }
+
+                if (this.mouseIsDown == true && this.movingSelectedState == true && this.selectedState != null)
                 {
                     this.selectedState.posX = mx;
                     this.selectedState.posY = my;
                 }
                 break;
-
         }
     }
 }
@@ -393,7 +466,7 @@ class StateMachine
 
     const canvas = document.getElementById("testCanvas");
     const sm = new StateMachine(canvas);
-    ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'onhover'].forEach(function(eventType)
+    ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'dblclick'].forEach(function(eventType)
     {
         canvas.addEventListener(eventType, function(e) {
             sm.eventListener(e);
