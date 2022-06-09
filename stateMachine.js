@@ -29,11 +29,12 @@ class StateMachine
         this.mouseIsDown = false;
         this.selectedState = null;
         this.selectedEdge = null;
-        this.drawingEdge = false;   // <--- Depreciated
+        //this.drawingEdge = false;   // <--- Depreciated
 
         //misc variables
         this.minimumStateRadius = 10;
         this.pressedKeys = new Map();
+        this.edgeClickDistance = 10;
 
         this._setEventListeners(this);
         this.resize();
@@ -66,6 +67,9 @@ class StateMachine
             ctx.beginPath();
             ctx.arc(state.posX, state.posY, textRadius, 0, Math.PI*2);
             ctx.stroke();
+            //ctx.fillStyle = 'rgb(250,100,100)';
+            //ctx.fill();
+            ctx.fillStyle = 'rgb(0,0,0)';
             ctx.textAlign = "center";
             ctx.fillText(name, state.posX, state.posY+textHeight/2);
             ctx.closePath();
@@ -78,8 +82,8 @@ class StateMachine
             const state = this.states[i];
             for (let j=0; j<state.edges.length; j++)
             {
-                const otherState = state.edges[j].otherState;
-                if (otherState == state) //check for edge to self
+                const endState = state.edges[j].endState;
+                if (endState == state) //check for edge to self
                 {
                     //draw arc
                     ctx.beginPath();
@@ -104,12 +108,12 @@ class StateMachine
 
                     continue;
                 }
-                const angle = Math.atan2(otherState.posY - state.posY, otherState.posX - state.posX);
+                const angle = Math.atan2(endState.posY - state.posY, endState.posX - state.posX);
 
                 const sx = state.posX + state.radius * Math.cos(angle); //sx = start x
                 const sy = state.posY + state.radius * Math.sin(angle);
-                const ex = otherState.posX - (otherState.radius+3) * Math.cos(angle);
-                const ey = otherState.posY - (otherState.radius+3) * Math.sin(angle);
+                const ex = endState.posX - (endState.radius+3) * Math.cos(angle);
+                const ey = endState.posY - (endState.radius+3) * Math.sin(angle);
 
                 const a2 = angle + Math.PI/6;
                 const a3 = angle - Math.PI/6;
@@ -137,24 +141,24 @@ class StateMachine
             const state = this.states[i];
             for (let j=i+1; j<this.states.length; j++)
             {
-                const otherState = this.states[j];
-                const dist = this._distBetweenPoints(state.posX, state.posY, otherState.posX, otherState.posY);
-                const angle = Math.atan2(otherState.posY - state.posY, otherState.posX - state.posX);
-                const difference = dist - (state.radius + otherState.radius + 100);
+                const endState = this.states[j];
+                const dist = this._distBetweenPoints(state.posX, state.posY, endState.posX, endState.posY);
+                const angle = Math.atan2(endState.posY - state.posY, endState.posX - state.posX);
+                const difference = dist - (state.radius + endState.radius + 100);
                 if ( difference < 0  )
                 {
                     const movementAmount = Math.min(-difference/10, 5) * speedMultiplier; //difference is negative, so movementAmount is positive
                     state.forceX -= movementAmount * Math.cos(angle);
                     state.forceY -= movementAmount * Math.sin(angle);
-                    otherState.forceX += movementAmount * Math.cos(angle);
-                    otherState.forceY += movementAmount * Math.sin(angle);
+                    endState.forceX += movementAmount * Math.cos(angle);
+                    endState.forceY += movementAmount * Math.sin(angle);
                 } else if (difference > 500)
                 {
                     const movementAmount = Math.min(difference/300, 5) * speedMultiplier/2;
                     state.forceX += movementAmount * Math.cos(angle);
                     state.forceY += movementAmount * Math.sin(angle);
-                    otherState.forceX -= movementAmount * Math.cos(angle);
-                    otherState.forceY -= movementAmount * Math.sin(angle);
+                    endState.forceX -= movementAmount * Math.cos(angle);
+                    endState.forceY -= movementAmount * Math.sin(angle);
                 }
             }
         }
@@ -202,7 +206,7 @@ class StateMachine
 
         const obj = {
             name: stateName,
-            edges: [], // in form of objects {otherStateName, edgeName}
+            edges: [], // in form of objects {endStateName, edgeName}
 
             radius: 0, //used for rendering
             posX: posX,
@@ -218,6 +222,10 @@ class StateMachine
     }
     removeState(stateName)
     {
+        if (stateName instanceof Object)
+        {
+            stateName = stateName.name;
+        }
         //remove from state Array, and from stateObjects
         for (let i=0; i<this.states.length; i++)
         {
@@ -232,7 +240,7 @@ class StateMachine
             const edges = state.edges;
             for (let j=0; j<edges.length; j++)
             {
-                if ( edges[j].otherStateName == stateName )
+                if ( edges[j].endState.name == stateName || edges[j].startState.name == stateName)
                 {
                     edges.splice(j, 1);
                 }
@@ -267,34 +275,88 @@ class StateMachine
         //Now, we have 2 states & stateNames, and an edgeName
         state1.edges.push({
             startState: state1,
-            otherState: state2,
-            edgeName: edgeName,
+            endState: state2,
+            name: edgeName,
         });
     }
-    removeEdge(state1Name, state2Name, edgeName)
+    removeEdge(state1Name, edgeName)
     {
-        let state1 = this.nameToStateMap.get(state1Name);
-        if (state1 == null)
+        let state;
+        if (!(state1Name instanceof Object))
+        {
+            state = this.nameToStateMap.get(state1Name);
+        } else {
+            state = state1Name;
+        }
+
+        if (edgeName instanceof Object)
+        {
+            edgeName = edgeName.name;
+        }
+
+        if (state == null)
         {
             console.error("StateMachine.removeEdge(): cannot remove edge from state that DNE");
             return;
         }
 
         //remove edge from state1.edges;
-        const edges = state1.edges;
+        const edges = state.edges;
         for (let i=0; i<edges.length; i++)
         {
-            if (edges[i].otherState.name == state2Name && edges[i].edgeName == edgeName) //not checking state1Name, because those shouldn't be necessary... may remove them later
+            if (edges[i].startState == state && edges[i].name == edgeName) //not checking state1Name, because those shouldn't be necessary... may remove them later
             {
                 edges.splice(i, 1);
             }
         }
     }
-    _distBetweenPoints(x1, y1, x2, y2)
-    {
 
-        return Math.sqrt( Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2) );
+    /*renameState(stateName, newName)
+    {
+        if (stateName instanceof Object)
+        {
+            stateName.name = newName;
+        } else {
+            let state = this.nameToStateMap.get(stateName);
+            if (state != null)
+            {
+                state.name = newName;
+            }
+        }
     }
+    renameEdge(startStateName, edgeName, newEdgeName)
+    {
+        let state = startStateName;
+        if (!(startStateName instanceof Object))
+        {
+            state = this.nameToStateMap.get(startStateName);
+            if (state == null)
+            {
+                console.error(".renameEdge - could not find stateState who's edge i'm supposed to rename");
+            }
+        }
+
+        const edges = state.edges;
+        for (let i=0; i<edges.length; i++)
+        {
+            if (edges[i].startState == state && edges[i].name == edgeName)
+            {
+                edges[i].name = newEdgeName;
+                return;
+            }
+        }
+        console.error("Could not find edge to rename");
+    }*/
+
+    clear()
+    {
+        this.selectedState = null;
+        this.selectedEdge = null;
+        this.userState = 'idle';
+        this.states = [];
+        this.nameToStateMap = new Map();
+    }
+
     loadMachine(code='node1,node2,edge1,')
     {
         /*code.replace(/(\r\n|\n|\r)/gm, "");
@@ -331,12 +393,18 @@ class StateMachine
             this.addEdge(s1,s2,e);
         }
     }
+
     resize() {
         
         const bb = this.htmlCanvasElement.getBoundingClientRect();
         this.htmlCanvasElement.width = Math.round(bb.width);
         this.htmlCanvasElement.height = Math.round(bb.height);
         //this.ctx = this.htmlCanvasElement.getContext("2d");
+    }
+    _distBetweenPoints(x1, y1, x2, y2)
+    {
+
+        return Math.sqrt( Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2) );
     }
     _getStateClicked(mx,my) //returns a state if at mx,my
     {
@@ -351,7 +419,58 @@ class StateMachine
     }
     _getEdgeClicked(mx,my)
     {
+        let shortestDist = this.edgeClickDistance;
+        //let bestState;
+        let bestEdge;
+        let x1, x2, y1, y2, A, B, C, D, param, len_sq, xx, yy, dx, dy, dist;
+        for (let i in this.states)
+        {
+            const edges = this.states[i].edges;
+            for (let j in edges)
+            {
+                x1 = edges[j].startState.posX;
+                y1 = edges[j].startState.posY;
+                x2 = edges[j].endState.posX;
+                y2 = edges[j].endState.posY;
+                A = mx-x1;
+                B = my-y1;
+                C = x2-x1;
+                D = y2-y1;
 
+                //var dot = A * C + B * D;
+                len_sq = C * C + D * D;
+                param = -1;
+                if (len_sq != 0) 
+                {   //in case of 0 length line
+                    param = (A * C + B * D) / len_sq;
+                }
+
+                if (param < 0) {
+                    xx = x1;
+                    yy = y1;
+                }
+                else if (param > 1) {
+                    xx = x2;
+                    yy = y2;
+                }
+                else {
+                    xx = x1 + param * C;
+                    yy = y1 + param * D;
+                }
+
+                dx = mx - xx;
+                dy = my - yy;
+                dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < shortestDist)
+                {
+                    shortestDist = dist;
+                    //bestState = this.states[i];
+                    bestEdge = edges[j];
+                }
+            }
+        }
+        console.log(bestEdge);
+        return bestEdge;
     }
     _removeEdgeWithName(name) //returns removed edge
     {
@@ -360,7 +479,7 @@ class StateMachine
             const state = this.states[i];
             for (let j=0; j<state.edges.length; j++)
             {
-                if (state.edges[j].edgeName == name)
+                if (state.edges[j].name == name)
                 {
                     let tempEdge = state.edges[j];
                     state.edges.splice(j,1);
@@ -371,6 +490,7 @@ class StateMachine
     }
     _eventListener(event) {
         let keyPressed = null;
+        let rawKeyPressed = null;
         let keyReleased = null;
         let clickedState = null;
 
@@ -414,7 +534,13 @@ class StateMachine
                 break;
             case 'keydown':
                 keyPressed = event.key.toLowerCase();
+                rawKeyPressed = event.key;
                 this.pressedKeys.set(keyPressed,true);
+                if (keyPressed == 'escape' && this.userState != 'renaming') { 
+                    this.userState = 'idle'; 
+                    this.selectedState = null; 
+                    this.selectedEdge = null;
+                }
                 break;
             case 'keyup':
                 keyReleased = event.key.toLowerCase();
@@ -422,13 +548,13 @@ class StateMachine
                 break;
         }
         
-
         /////Possible States
         // Idle                 nothing currently happening
         // drawingEdge          currently drawing an edge, so this.selectedState is a temporary state, and so is the edge
         // draggingState        currently moving this.selectedState
+        // renaming             currently renaming this.selectedState or this.selectedEdge, with edge priority
 
-        if (this.userState == 'idle')
+        if (this.userState == 'idle' || this.userState == null)
         {
             //If clicked object, and shift is held down --> Create New Edge
             if (clickedState != null && this.pressedKeys.get('shift') == true)
@@ -436,7 +562,7 @@ class StateMachine
                 this.userState = 'drawingEdge';
                 this.selectedState = {
                     name: "_temp_undefined_state_",
-                    edges: [], // in form of objects {otherStateName, edgeName}
+                    edges: [], // in form of objects {endStateName, name}
         
                     radius: 0, //used for rendering
                     posX: this.mx,
@@ -448,8 +574,8 @@ class StateMachine
                 };
                 this.selectedEdge = {
                     startState: clickedState,
-                    otherState: this.selectedState,
-                    edgeName: "_temp_undefined_edge_",
+                    endState: this.selectedState,
+                    name: "_temp_undefined_edge_",
                 };
                 clickedState.edges.push(this.selectedEdge);
                 //this.movingSelectedState = true;
@@ -473,6 +599,45 @@ class StateMachine
                 this.userState = 'draggingState';
                 this.selectedState = clickedState;
                 //this.movingSelectedState = true;
+                return;
+            }
+
+            //if clicked on nothing...
+            if (event.type == 'mousedown' && clickedState == null)
+            {
+                this.selectedEdge = this._getEdgeClicked(this.mx, this.my);
+            }
+
+            //if backspace was pressed --> delete selected edge or state
+            if (event.type == 'keydown' && (keyPressed == 'backspace' || keyPressed == 'delete'))
+            {
+                if (this.selectedEdge != null)
+                {
+                    this.removeEdge(this.selectedEdge.startState, this.selectedEdge);
+                    this.selectedEdge = null;
+                    this.selectedState = null;
+                    return;
+                }
+                if (this.selectedState != null)
+                {
+                    this.removeState(this.selectedState);
+                    this.selectedState = null;
+                    return;
+                }
+            }
+
+            //if we're pressing shift & r --> rename 
+            if (event.type == 'keydown' && (this.pressedKeys.get('shift') == true && this.pressedKeys.get('r') == true) )
+            {
+                if (this.selectedEdge == null && this.selectedState == null)
+                {
+                    return;
+                }
+                this.userState = 'renaming';
+                if (this.selectedState != null && this.selectedEdge == null)
+                {
+                    this.nameToStateMap.set(this.selectedState.name, null);
+                }
                 return;
             }
         }
@@ -543,6 +708,58 @@ class StateMachine
             if (event.type == 'mouseout')
             {
                 this.userState = 'idle';
+            }
+        }
+
+        if (this.userState == 'renaming')
+        {
+            if (event.type == 'keydown')
+            {
+
+                //exiting renaming state
+                if (rawKeyPressed == 'Enter' || rawKeyPressed == 'Escape')
+                {
+                    if (this.selectedState != null && this.selectedEdge == null)
+                    {
+                        if (this.nameToStateMap.get(this.selectedState.name) != null)
+                        {
+                            console.error("State name already taken. Random one assigned.");
+                            this.selectedState.name = "rand_name_"+Math.round(Math.random()*1000000);
+                        }
+                        this.nameToStateMap.set(this.selectedState.name, this.selectedState);
+                    }
+                    this.userState = 'idle';
+                }
+
+                //Make sure only single letters continue past this point
+                if ((rawKeyPressed.length > 1 && rawKeyPressed != 'Backspace') || rawKeyPressed == ' ')
+                {
+                    return;
+                }
+
+                //If editing this.selectedEdge.name...
+                if (this.selectedEdge != null)
+                {
+                    if (rawKeyPressed == 'Backspace')
+                    {
+                        this.selectedEdge.name = this.selectedEdge.name.slice(0,-1);
+                        return;
+                    }
+                    this.selectedEdge.name += rawKeyPressed;
+                    return;
+                }
+                
+                //if editing this.selectedState.name...
+                if (this.selectedState != null)
+                {
+                    if (rawKeyPressed == 'Backspace')
+                    {
+                        this.selectedState.name = this.selectedState.name.slice(0,-1);
+                        return;
+                    }
+                    this.selectedState.name += rawKeyPressed;
+                    return;
+                }
             }
         }
 
@@ -820,16 +1037,22 @@ class StateMachine_WEIRD_ATTEMPT
 {
 
     const canvas = document.getElementById("testCanvas");
+    const userStateElement = document.getElementById("currentStateElement");
+    const nameInputElement = document.getElementById("nameInputElement");
     const sm = new StateMachine(canvas);
     //sm.setEventListeners(sm);
 
 
     //randomly generate new fsm & load it
-    let text = '';
-    let possibleStates = ['a234567890','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
+    
+    let text = ""/*`a,b,firstEdge,
+    b,c,secondEdge,
+    c,a,thirdEdge,
+    a,cthe,fourht`;*/
+    const possibleStates = ['a234567890','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
     for (let i=0; i<10; i++)
     {
-        text += possibleStates[Math.floor(Math.random() * possibleStates.length)] +','+possibleStates[Math.floor(Math.random() * possibleStates.length)]+','+'1,'; 
+        text += possibleStates[Math.floor(Math.random() * possibleStates.length)] +','+possibleStates[Math.floor(Math.random() * possibleStates.length)]+','+'e_'+Math.round(Math.random()*1000)+","; 
     }
     console.log(text)
     sm.loadMachine(text);
@@ -839,8 +1062,24 @@ class StateMachine_WEIRD_ATTEMPT
 
     function update() {
         sm.render();
+
+        let overlayTxt = "User State: " + sm.userState;
+        if (sm.selectedState != null) { overlayTxt += "<br>Selected State: " + sm.selectedState.name; } else { overlayTxt += "<br>Selected State: (none)"; }
+        if (sm.selectedEdge != null) { overlayTxt += "<br>Selected Edge: " + sm.selectedEdge.name; } else { overlayTxt += "<br>Selected Edge: (none)"; }
+        userStateElement.innerHTML = overlayTxt;
+
+
     }
 
     
 
 }
+
+
+/*
+a,b,firstEdge,
+b,c,secondEdge,
+c,a,thirdEdge
+
+
+*/
