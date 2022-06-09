@@ -13,29 +13,44 @@ class StateMachine
         this.ctx = this.htmlCanvasElement.getContext("2d");
 
 
+        //Rendering variables
+        this.backgroundColor = 'rgb(200,200,200)';
+        this.defaultStrokeColor = 'black';
+        this.defaultStrokeWidth = 2;
+        this.defaultFont = '15px sans-serif';
 
 
-        
+        this.userState = 'idle'; //for determining what user input pattern is currently happening
+
+
         //mouse moving stuff
+        this.mx = 0; //mouseX
+        this.my = 0; //mouseY
         this.mouseIsDown = false;
         this.selectedState = null;
-        this.drawingEdge = false;
-        this.movingSelectedState = false;
-
+        this.selectedEdge = null;
+        this.drawingEdge = false;   // <--- Depreciated
 
         //misc variables
         this.minimumStateRadius = 10;
+        this.pressedKeys = new Map();
 
-
+        this._setEventListeners(this);
         this.resize();
 
     }
     render() {
         const ctx = this.ctx; //this.htmlCanvasElement.getContext('2d');
+
+        //Clear Screen
+        ctx.fillStyle = this.backgroundColor;
         ctx.clearRect(0, 0, this.htmlCanvasElement.width, this.htmlCanvasElement.height);
+        ctx.fillRect(0, 0, this.htmlCanvasElement.width, this.htmlCanvasElement.height);
         
-        ctx.lineWidth = 1;
-        ctx.font = '15px sans-serif';
+        //Set Default Colors
+        ctx.fillStyle = this.defaultStrokeColor;
+        ctx.lineWidth = this.defaultStrokeWidth;
+        ctx.font = this.defaultFont;
 
 
         //draw all of the states
@@ -173,10 +188,11 @@ class StateMachine
             state.posY = Math.min(Math.max(state.posY, r), this.htmlCanvasElement.height - r);
 
         }
+
+        this._eventListener({type: 'adjustStatePosition_event'});
     }
     addState(stateName, posX=Math.random()*this.htmlCanvasElement.width, posY=Math.random()*this.htmlCanvasElement.height)
     {
-
         //make sure stateName is not already a state
         const res = this.nameToStateMap.get(stateName);
         if (res != null) {
@@ -353,10 +369,184 @@ class StateMachine
             }
         }
     }
+    _eventListener(event) {
+        let keyPressed = null;
+        let keyReleased = null;
+        let clickedState = null;
 
-    eventListener(event) {
-        let mx = 0;
-        let my = 0;
+        //get data from event
+        if (event == null)
+        {
+            event = {type: 'unknown_event'};
+            console.error("event listener was passed an event without a type!");
+        }
+        switch (event.type) 
+        {
+            case 'mousedown':
+                this.mx = event.offsetX;
+                this.my = event.offsetY;
+                this.mouseIsDown = true;
+                clickedState = this._getStateClicked(this.mx, this.my);
+                break;
+            case 'mouseup':
+                this.mx = event.offsetX;
+                this.my = event.offsetY;
+                this.mouseIsDown = false;
+                break;
+            case 'mousemove':
+                this.mx = event.offsetX;
+                this.my = event.offsetY;
+                if (this.movingSelectedState == true && this.selectedState != null) {
+                    this.selectedState.posX = this.mx;
+                    this.selectedState.posY = this.my;
+                }
+                break;
+            case 'mouseout':
+                this.mx = event.offsetX;
+                this.my = event.offsetY;
+                this.mouseIsDown = false;
+                break;
+            case 'dblclick':
+                this.mx = event.offsetX;
+                this.my = event.offsetY;
+                this.mouseIsDown = true;
+                clickedState = this._getStateClicked(this.mx, this.my);
+                break;
+            case 'keydown':
+                keyPressed = event.key.toLowerCase();
+                this.pressedKeys.set(keyPressed,true);
+                break;
+            case 'keyup':
+                keyReleased = event.key.toLowerCase();
+                this.pressedKeys.set(keyReleased,false);
+                break;
+        }
+        
+
+        /////Possible States
+        // Idle                 nothing currently happening
+        // drawingEdge          currently drawing an edge, so this.selectedState is a temporary state, and so is the edge
+        // draggingState        currently moving this.selectedState
+
+        if (this.userState == 'idle')
+        {
+            //If clicked object, and shift is held down --> Create New Edge
+            if (clickedState != null && this.pressedKeys.get('shift') == true)
+            {
+                this.userState = 'drawingEdge';
+                this.selectedState = {
+                    name: "_temp_undefined_state_",
+                    edges: [], // in form of objects {otherStateName, edgeName}
+        
+                    radius: 0, //used for rendering
+                    posX: this.mx,
+                    posY: this.my,
+                    velocityX: 0,
+                    velocityY: 0,
+                    forceX: 0,
+                    forceY: 0,
+                };
+                this.selectedEdge = {
+                    startState: clickedState,
+                    otherState: this.selectedState,
+                    edgeName: "_temp_undefined_edge_",
+                };
+                clickedState.edges.push(this.selectedEdge);
+                //this.movingSelectedState = true;
+                return;
+            }
+
+            //If clicked nothing, and shift is held down --> Create New State
+            if (event.type == 'mousedown' && this.pressedKeys.get('shift') == true)
+            {
+                this.userState = 'draggingState';
+                const newStateName = "s_" + Math.round(Math.random()*1000);
+                this.addState(newStateName, this.mx, this.my)
+                this.selectedState = this.nameToStateMap.get(newStateName);
+                //this.movingSelectedState = true;
+                return;
+            }
+
+            //if simply mousedown on a state --> drag selected state
+            if (clickedState != null) 
+            {
+                this.userState = 'draggingState';
+                this.selectedState = clickedState;
+                //this.movingSelectedState = true;
+                return;
+            }
+        }
+
+        if (this.userState == 'drawingEdge')
+        {
+            //if the selected state is not null --> move state to mouse pos
+            if (this.selectedState != null)
+            {
+                this.selectedState.posX = this.mx;
+                this.selectedState.posY = this.my;
+            }
+
+            //If mousedown && we clicked a state --> create edge to clicked state
+            if (event.type == 'mousedown' && clickedState != null)
+            {
+                const newEdgeName = 'e_'+Math.round(Math.random()*1000);
+                this.addEdge(this.selectedEdge.startState.name, clickedState.name, newEdgeName);
+                this._removeEdgeWithName("_temp_undefined_edge_");
+                this.selectedState = null;
+                //this.movingSelectedState = false;
+                this.selectedEdge = null;
+                this.userState = 'idle';
+                return;
+            }
+            
+            //if mousedown && we DID NOT click a state --> create edge to NEW state
+            if (event.type == 'mousedown' && clickedState == null)
+            {
+                //First, create new state
+                const newStateName = 's_'+Math.round(Math.random()*1000);
+                this.addState(newStateName, this.mx, this.my);
+                const newState = this.nameToStateMap.get(newStateName);
+
+                //now, create new edge
+                const newEdgeName = 'e_'+Math.round(Math.random()*1000);
+                this.addEdge(this.selectedEdge.startState.name, newState.name, newEdgeName);
+                this._removeEdgeWithName("_temp_undefined_edge_");
+                this.selectedState = null;
+                //this.movingSelectedState = false;
+                this.selectedEdge = null;
+                this.userState = 'idle';
+                return;
+                
+            }
+        }
+
+        if (this.userState == 'draggingState')
+        {
+            //if the selected state is not null --> move state to mouse pos
+            if (this.selectedState != null)
+            {
+                this.selectedState.posX = this.mx;
+                this.selectedState.posY = this.my;
+                this.selectedState.forceX = 0;
+                this.selectedState.forceY = 0;
+                this.selectedState.velocityX = 0;
+                this.selectedState.velocityY = 0;
+            }
+            
+            //if mouseup, we're done dragging --> done dragging state
+            if (event.type == 'mouseup')
+            {
+                this.userState = 'idle';
+            }
+
+            //if mouseout --> done dragging
+            if (event.type == 'mouseout')
+            {
+                this.userState = 'idle';
+            }
+        }
+
+        return;
         switch(event.type)
         {
             case 'mousedown': 
@@ -368,10 +558,21 @@ class StateMachine
                 if (this.drawingEdge == true)
                 {
                     this.drawingEdge = false;
+                    this.selectedState = null;
                     let newSelectedState = this._getStateClicked(mx,my);
 
                     //Now, let's find the tempEdge and remove it from the graph
                     let tempEdge = this._removeEdgeWithName('_undefined_temp_edge_');
+
+                    //If pressing shift and user didn't click on existing state, create a new state
+                    if (newSelectedState == null && this.pressedKeys.get('shift') == true)
+                    {
+                        let newStateName = 'state_'+Math.round(Math.random()*1000);
+                        this.addState(newStateName, mx, my);
+                        newSelectedState = this.nameToStateMap.get(newStateName);
+                        this.selectedState = newSelectedState;
+                        this.movingSelectedState = true;
+                    }
 
                     //If we didn't click on another state, then we don't recreate the edge (no second state)
                     if (newSelectedState == null) {  //remove temp edge
@@ -379,9 +580,27 @@ class StateMachine
                     }
 
                     if (tempEdge == null) { console.error("did not find and remove temp edge"); break;}
+
                     //Now, recreate the tempEdge the proper way this time
                     this.addEdge(tempEdge.startState.name, newSelectedState.name, 'undefined' );
-                    this.selectedState = null;
+                    break;
+                }
+
+                //If shift click, then act as double click
+                if(this.pressedKeys.get('shift') == true)
+                {
+                    //If we clicked on an existing state, then maybe we're trying to make an edge
+                    if (this._getStateClicked(mx,my) != null)
+                    {
+                        this._eventListener({type:'dblclick', offsetX:mx, offsetY: my});
+                        break;
+                    }
+
+                    //Create new state
+                    let newStateName = 'state_'+Math.round(Math.random()*1000);
+                    this.addState(newStateName, mx, my);
+                    this.selectedState = this.nameToStateMap.get(newStateName);
+                    this.movingSelectedState = true;
                     break;
                 }
 
@@ -392,13 +611,10 @@ class StateMachine
                     this.movingSelectedState = true;
                 } else {
                     //didn't select a state, but are we close to an edge?
-
                     console.error("Should put select edge here");
-
                 }
                 break;
             case 'dblclick':
-
                 this.mouseIsDown = false;
                 this.selectedState = null;
                 this.movingSelectedState == true
@@ -408,10 +624,16 @@ class StateMachine
                 my = event.offsetY;
 
                 this.selectedState = this._getStateClicked(mx,my);
+
+                //if we double clicked a state, we're creating a new edge. If not, we're creating a new state
                 if (this.selectedState != null)
                 {
                     this.movingSelectedState = true;
                 } else {
+                    let newStateName = 'state_'+Math.round(Math.random()*1000);
+                    this.addState(newStateName, mx, my);
+                    this.selectedState = this.nameToStateMap.get(newStateName);
+                    this.movingSelectedState = true;
                     break;
                 }
 
@@ -455,9 +677,142 @@ class StateMachine
                     this.selectedState.posY = my;
                 }
                 break;
+            case 'keydown':
+                key = event.key.toLowerCase();
+                this.pressedKeys.set(key, true);
+                break;
+            case 'keyup':
+                key = event.key.toLowerCase();
+                this.pressedKeys.set(key, false);
+                break;
         }
     }
+    _setEventListeners(selfObject)
+    {
+        //mouse listeners
+        ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'dblclick'].forEach(function(eventType)
+        {
+            selfObject.htmlCanvasElement.addEventListener(eventType, function(e) {
+                selfObject._eventListener(e);
+            })
+        });
+
+        ['keyup', 'keydown'].forEach(function(eventType)
+        {
+            document.addEventListener(eventType, function(e) {
+                selfObject._eventListener(e);
+            })
+        });
+    }
 }
+
+
+
+class Edge
+{
+    constructor(leavingState, enteringState, name)
+    {
+        this.leavingState = leavingState;
+        this.enteringState = enteringState;
+        this.name = name;
+    }
+}
+class State
+{
+    constructor(name)
+    {
+        if (name == null) { name = 'state_'+Math.round(Math.random()*1000000);}
+        this.name = name;
+        this.edges = [];
+    }
+
+    onEntry(eventObj, globalVariables)
+    {
+
+    }
+
+    onExit(eventObj, globalVariables)
+    {
+
+    }
+}
+class StateMachine_WEIRD_ATTEMPT
+{
+    constructor()
+    {
+        this.states = [];
+        this.nameToStateMap = new Map();
+        this.currentState;
+        this.globalVariables = new Map(); //maps variable-names to variables
+    }
+    addState(state)
+    {
+        if (!(state instanceof State))
+        {
+            console.error("StateMachine.addState(): passed state must be of type State");
+            return;
+        }
+        this.nameToStateMap.set(state.name, state);
+    }
+    addEdge(state1, state2, edgeName)
+    {
+        if (!(state1 instanceof State))
+        {
+            state1 = this.nameToStateMap.get(state1);
+            if (!(state1 instanceof State))
+            {
+                console.error("StateMachine.addEdge(): states must be either of type State or by stateName of pre-exisiting state");
+                return;
+            }
+        }
+
+        if (!(state2 instanceof State))
+        {
+            state2 = this.nameToStateMap.get(state2);
+            if (!(state2 instanceof State))
+            {
+                console.error("StateMachine.addEdge(): states must be either of type State or by stateName of pre-exisiting state");
+                return;
+            }
+        }
+
+        const edge = new Edge(state1, state2, edgeName);
+        state1.edges.push(edge);
+    }
+    setState(state)
+    {
+        if (!(state instanceof State))
+        {
+            state = this.nameToStateMap.get(state);
+            if (!(state instanceof State))
+            {
+                console.error("StateMachine.setState(): state must be either of type State or by stateName of pre-exisiting state");
+                return;
+            }
+        }
+        this.currentState = state;
+        this.currentState.onEntry({name: 'setToState'});
+    }
+    input(eventObj)
+    {
+        const edges = this.currentState.edges;
+        for (let i in edges)
+        {
+            if (edges[i].name == eventObj.name)
+            {
+                edges[i].leavingState.onExit(eventObj, this.globalVariables);
+                this.currentState = edges[i].enteringState;
+                this.currentState.onEntry(eventObj, this.globalVariables);
+            }
+        }
+    }
+    getCurrentState()
+    {
+        return this.currentState.name;
+    }
+}
+
+
 
 
 
@@ -466,12 +821,7 @@ class StateMachine
 
     const canvas = document.getElementById("testCanvas");
     const sm = new StateMachine(canvas);
-    ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'dblclick'].forEach(function(eventType)
-    {
-        canvas.addEventListener(eventType, function(e) {
-            sm.eventListener(e);
-        })
-    })
+    //sm.setEventListeners(sm);
 
 
     //randomly generate new fsm & load it
