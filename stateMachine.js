@@ -15,7 +15,7 @@ class StateMachine
 
         //Rendering variables
         this.backgroundColor = 'rgb(200,200,200)';
-        this.defaultStrokeColor = 'black';
+        this.defaultStrokeColor = 'rgb(100,100,100)';
         this.defaultStrokeWidth = 2;
         this.defaultFont = '15px sans-serif';
 
@@ -64,11 +64,22 @@ class StateMachine
 
             state.radius = textRadius;
 
+            if (this.selectedEdge == null && this.selectedState != null && this.selectedState == state)
+            {
+                ctx.lineWidth = this.defaultStrokeWidth * 2;
+            } else {
+                ctx.lineWidth = this.defaultStrokeWidth;
+            }
+
+            ctx.strokeStyle = this.defaultStrokeColor;
             ctx.beginPath();
             ctx.arc(state.posX, state.posY, textRadius, 0, Math.PI*2);
+            if (this.currentState == state)
+            {
+                ctx.fillStyle = 'rgb(150,255,150,100)';
+                ctx.fill();
+            }
             ctx.stroke();
-            //ctx.fillStyle = 'rgb(250,100,100)';
-            //ctx.fill();
             ctx.fillStyle = 'rgb(0,0,0)';
             ctx.textAlign = "center";
             ctx.fillText(name, state.posX, state.posY+textHeight/2);
@@ -118,6 +129,14 @@ class StateMachine
                 const a2 = angle + Math.PI/6;
                 const a3 = angle - Math.PI/6;
 
+                if (this.selectedEdge == state.edges[j])
+                {
+                    ctx.lineWidth = this.defaultStrokeWidth*2;
+                } else {
+                    ctx.lineWidth = this.defaultStrokeWidth;
+                }
+
+                ctx.strokeStyle = this.defaultStrokeColor;
                 ctx.beginPath();
                 ctx.moveTo(sx, sy); //draw first line
                 ctx.lineTo(ex, ey);
@@ -125,6 +144,28 @@ class StateMachine
                 ctx.moveTo(ex, ey);
                 ctx.lineTo(ex - 10*Math.cos(a3), ey - 10*Math.sin(a3));
                 ctx.stroke();
+
+                let rotAngle = angle;                
+                
+                if (rotAngle < 0)
+                {
+                    rotAngle += Math.PI*2;
+                }
+                if (rotAngle < Math.PI/2 || rotAngle >= 3*Math.PI/2)
+                {
+                    rotAngle = angle;
+                } else {
+                    rotAngle = angle+Math.PI;
+                }
+                
+
+                ctx.fillStyle = 'rgb(0,0,0)';
+                ctx.textAlign = "center";
+                ctx.save();
+                ctx.translate((state.posX+endState.posX)/2, (state.posY+endState.posY)/2);
+                ctx.rotate(rotAngle);
+                ctx.fillText(state.edges[j].name, 0,-2  );
+                ctx.restore();
                 ctx.closePath();
             }
         }
@@ -183,11 +224,11 @@ class StateMachine
             
             state.posX += state.velocityX/2;
             state.posY += state.velocityY/2;
-            state.velocityX -= state.velocityX/10;
-            state.velocityY -= state.velocityY/10;
+            state.velocityX -= state.velocityX/5;
+            state.velocityY -= state.velocityY/5;
 
             //node, make sure node is completely within screen
-            const r = state.radius * 4;
+            const r = state.radius;
             state.posX = Math.min(Math.max(state.posX, r), this.htmlCanvasElement.width - r);
             state.posY = Math.min(Math.max(state.posY, r), this.htmlCanvasElement.height - r);
 
@@ -598,6 +639,7 @@ class StateMachine
             {
                 this.userState = 'draggingState';
                 this.selectedState = clickedState;
+                this.selectedEdge = null;
                 //this.movingSelectedState = true;
                 return;
             }
@@ -606,6 +648,11 @@ class StateMachine
             if (event.type == 'mousedown' && clickedState == null)
             {
                 this.selectedEdge = this._getEdgeClicked(this.mx, this.my);
+                if (this.selectedEdge == null)
+                {
+                    this.selectedEdge = null;
+                    this.selectedState = null;
+                }
             }
 
             //if backspace was pressed --> delete selected edge or state
@@ -914,12 +961,19 @@ class StateMachine
             })
         });
 
+        //keyboard listeners
         ['keyup', 'keydown'].forEach(function(eventType)
         {
             document.addEventListener(eventType, function(e) {
                 selfObject._eventListener(e);
             })
         });
+
+        //window listener (resize)
+        window.addEventListener('resize', function(e)
+        {
+            selfObject.resize(e);
+        })
     }
 }
 
@@ -1050,7 +1104,7 @@ class StateMachine_WEIRD_ATTEMPT
     c,a,thirdEdge,
     a,cthe,fourht`;*/
     const possibleStates = ['a234567890','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
-    for (let i=0; i<10; i++)
+    for (let i=0; i<2; i++)
     {
         text += possibleStates[Math.floor(Math.random() * possibleStates.length)] +','+possibleStates[Math.floor(Math.random() * possibleStates.length)]+','+'e_'+Math.round(Math.random()*1000)+","; 
     }
