@@ -14,7 +14,7 @@ class StateMachine
 
 
         //Rendering variables
-        this.backgroundColor = 'rgb(200,200,200)';
+        this.backgroundColor = 'rgb(240,240,240)';
         this.defaultStrokeColor = 'rgb(100,100,100)';
         this.defaultStrokeWidth = 2;
         this.defaultFont = '15px sans-serif';
@@ -74,13 +74,21 @@ class StateMachine
             ctx.strokeStyle = this.defaultStrokeColor;
             ctx.beginPath();
             ctx.arc(state.posX, state.posY, textRadius, 0, Math.PI*2);
+
+            
             if (this.currentState == state)
             {
                 ctx.fillStyle = 'rgb(150,255,150,100)';
                 ctx.fill();
             }
-            ctx.stroke();
+
             ctx.fillStyle = 'rgb(0,0,0)';
+            if (this.selectedState == state && this.userState == 'renaming')
+            {
+                ctx.fillStyle = 'rgb(150,0,0)';
+            }
+
+            ctx.stroke();
             ctx.textAlign = "center";
             ctx.fillText(name, state.posX, state.posY+textHeight/2);
             ctx.closePath();
@@ -93,6 +101,7 @@ class StateMachine
             const state = this.states[i];
             for (let j=0; j<state.edges.length; j++)
             {
+
                 const endState = state.edges[j].endState;
                 if (endState == state) //check for edge to self
                 {
@@ -145,6 +154,13 @@ class StateMachine
                 ctx.lineTo(ex - 10*Math.cos(a3), ey - 10*Math.sin(a3));
                 ctx.stroke();
 
+
+                if (state.edges[j].name == '_temp_undefined_edge_')
+                {
+                    ctx.closePath();
+                    continue;
+                }
+
                 let rotAngle = angle;                
                 
                 if (rotAngle < 0)
@@ -160,6 +176,10 @@ class StateMachine
                 
 
                 ctx.fillStyle = 'rgb(0,0,0)';
+                if (this.selectedEdge == state.edges[j] && this.userState == 'renaming')
+                {
+                    ctx.fillStyle = 'rgb(150,0,0)';
+                }
                 ctx.textAlign = "center";
                 ctx.save();
                 ctx.translate((state.posX+endState.posX)/2, (state.posY+endState.posY)/2);
@@ -674,7 +694,7 @@ class StateMachine
             }
 
             //if we're pressing shift & r --> rename 
-            if (event.type == 'keydown' && (this.pressedKeys.get('shift') == true && this.pressedKeys.get('r') == true) )
+            if (event.type == 'keydown' && keyPressed == 'r' )
             {
                 if (this.selectedEdge == null && this.selectedState == null)
                 {
